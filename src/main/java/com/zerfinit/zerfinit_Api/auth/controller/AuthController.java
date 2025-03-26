@@ -7,21 +7,16 @@ import com.zerfinit.zerfinit_Api.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.beans.factory.annotation.Autowired;
 
 @RestController
 @RequestMapping("/api/auth")
-
+@RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
 
-    @Autowired // ✅ This injects AuthService into the constructor
-    public AuthController(AuthService authService) {
-        this.authService = authService;
-    }
-
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody User user) {
-        return ResponseEntity.ok(authService.register(user));
+    public ResponseEntity<User> register(@RequestBody User user) {
+        User registeredUser = authService.register(user);
+        return ResponseEntity.ok(registeredUser);
     }
 }
