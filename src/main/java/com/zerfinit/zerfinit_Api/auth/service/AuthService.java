@@ -1,8 +1,10 @@
 package com.zerfinit.zerfinit_Api.auth.service;
 
 import com.zerfinit.zerfinit_Api.auth.model.AuthResponse;
+import com.zerfinit.zerfinit_Api.auth.model.PasswordResetToken;
 import com.zerfinit.zerfinit_Api.auth.model.User;
 import com.zerfinit.zerfinit_Api.auth.model.VerificationToken;
+import com.zerfinit.zerfinit_Api.auth.repository.PasswordResetTokenRepository;
 import com.zerfinit.zerfinit_Api.auth.repository.UserRepository;
 import com.zerfinit.zerfinit_Api.auth.repository.VerificationTokenRepository;
 import com.zerfinit.zerfinit_Api.config.JwtTokenUtil;
@@ -24,6 +26,7 @@ import java.util.UUID;
 public class AuthService {
     private final UserRepository userRepository;
     private final VerificationTokenRepository tokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
     private final AuthenticationManager authenticationManager;
@@ -31,10 +34,11 @@ public class AuthService {
     private final UserDetailsServiceImpl userDetailsService;
 
     @Value("${spring.mail.username}")
-    private String fromEmail; // Inject the sender email from properties
+    private String fromEmail;
 
     public AuthService(UserRepository userRepository,
                        VerificationTokenRepository tokenRepository,
+                       PasswordResetTokenRepository passwordResetTokenRepository,
                        PasswordEncoder passwordEncoder,
                        JavaMailSender mailSender,
                        AuthenticationManager authenticationManager,
@@ -42,6 +46,7 @@ public class AuthService {
                        UserDetailsServiceImpl userDetailsService) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.mailSender = mailSender;
         this.authenticationManager = authenticationManager;
@@ -55,7 +60,7 @@ public class AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setRole("STUDENT"); // Default role
+        user.setRole("STUDENT");
         User savedUser = userRepository.save(user);
 
         String token = UUID.randomUUID().toString();
@@ -66,7 +71,6 @@ public class AuthService {
         tokenRepository.save(verificationToken);
 
         sendVerificationEmail(savedUser.getEmail(), token);
-
         return savedUser;
     }
 
@@ -74,15 +78,15 @@ public class AuthService {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true);
 
-        helper.setFrom(fromEmail); // Set the "from" address explicitly
-        helper.setTo(toEmail);     // Set the "to" address to the customer's email
+        helper.setFrom(fromEmail);
+        helper.setTo(toEmail);
         helper.setSubject("Verify Your Email");
         String verificationUrl = "http://localhost:8080/api/auth/verify?token=" + token;
         helper.setText("Please click the link to verify your email: <a href='" + verificationUrl + "'>Verify Email</a>", true);
 
-        System.out.println("Sending verification email from: " + fromEmail + " to: " + toEmail); // Debug
+        System.out.println("Sending verification email from: " + fromEmail + " to: " + toEmail);
         mailSender.send(message);
-        System.out.println("Verification email sent successfully to: " + toEmail); // Debug
+        System.out.println("Verification email sent successfully to: " + toEmail);
     }
 
     public String verifyEmail(String token) {
@@ -115,5 +119,52 @@ public class AuthService {
 
         String token = jwtTokenUtil.generateToken(userDetailsService.loadUserByUsername(email));
         return new AuthResponse(token, user.getEmail(), user.getFirstname(), user.getLastname(), user.getRole(), user.getUsername());
+    }
+
+    // New: Initiate password reset
+    public void initiatePasswordReset(String email) throws MessagingException {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String token = UUID.randomUUID().toString();
+        PasswordResetToken resetToken = new PasswordResetToken();
+        resetToken.setToken(token);
+        resetToken.setUser(user);
+        resetToken.setExpiryDate(LocalDateTime.now().plusHours(1)); // 1-hour expiry
+        passwordResetTokenRepository.save(resetToken);
+
+        sendPasswordResetEmail(user.getEmail(), token);
+    }
+
+    private void sendPasswordResetEmail(String toEmail, String token) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setFrom(fromEmail);
+        helper.setTo(toEmail);
+        helper.setSubject("Reset Your Password");
+        String resetUrl = "http://localhost:8080/reset-password?token=" + token;
+        helper.setText("Please click the link to reset your password: <a href='" + resetUrl + "'>Reset Password</a>", true);
+
+        System.out.println("Sending password reset email from: " + fromEmail + " to: " + toEmail);
+        mailSender.send(message);
+        System.out.println("Password reset email sent successfully to: " + toEmail);
+    }
+
+    // New: Complete password reset
+    public String resetPassword(String token, String newPassword) {
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid reset token"));
+
+        if (resetToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Reset token has expired");
+        }
+
+        User user = resetToken.getUser();
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        passwordResetTokenRepository.delete(resetToken);
+
+        return "Password reset successfully";
     }
 }
