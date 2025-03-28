@@ -1,8 +1,6 @@
 package com.zerfinit.zerfinit_Api.auth.controller;
 
-import com.zerfinit.zerfinit_Api.auth.model.AuthResponse;
-import com.zerfinit.zerfinit_Api.auth.model.LoginRequest;
-import com.zerfinit.zerfinit_Api.auth.model.User;
+import com.zerfinit.zerfinit_Api.auth.model.*;
 import com.zerfinit.zerfinit_Api.auth.service.AuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,7 +48,28 @@ public class AuthController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+
+    // New: Forgot Password endpoint
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        try {
+            authService.initiatePasswordReset(request.getEmail());
+            return ResponseEntity.ok("Password reset email sent");
+        } catch (MessagingException e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body("Failed to send reset email: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    // New: Reset Password endpoint
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestParam String token, @RequestBody ResetPasswordRequest request) {
+        try {
+            return ResponseEntity.ok(authService.resetPassword(token, request.getNewPassword()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }
-
-
-
