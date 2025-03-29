@@ -5,24 +5,29 @@ import lombok.*;
 
 @Entity
 @Table(name = "users")
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, unique = true)
+    private String firstname;
+    private String lastname;
+    private String username;
     private String email;
-
-    @Column(nullable = false)
     private String password;
+    private String role; // STUDENT, TUTOR, ADMIN
+    private boolean isEnabled = false;
 
-    @Enumerated(EnumType.STRING)  // Ensure it is stored as a string in the database
-    @Column(nullable = false)
-    private Role role;
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+
+
 }
-
